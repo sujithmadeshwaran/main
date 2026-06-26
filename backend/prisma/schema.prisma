@@ -1,0 +1,270 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String?        @unique
+  phone         String?        @unique
+  passwordHash  String?
+  name          String
+  role          Role           @default(STUDENT)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  progress      Progress[]
+  quizAttempts  QuizAttempt[]
+  orders        Order[]
+  certificates  Certificate[]
+  reviews       Review[]
+  wishlist      Wishlist[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+}
+
+model OTP {
+  id           String   @id @default(uuid())
+  phoneOrEmail String
+  code         String
+  expiresAt    DateTime
+  verified     Boolean  @default(false)
+  type         String   // "LOGIN" or "VERIFICATION"
+  createdAt    DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  courses     Course[]
+}
+
+model Course {
+  id            String        @id @default(uuid())
+  title         String
+  slug          String        @unique
+  subtitle      String?
+  description   String
+  thumbnail     String?       // Image URL
+  previewVideo  String?       // Video URL
+  price         Float         // One-time payment price (in INR)
+  discount      Float         @default(0) // Discount percentage
+  duration      Float         @default(0) // Total hours
+  difficulty    String        // "Beginner", "Intermediate", "Advanced"
+  language      String        @default("English")
+  categoryId    String
+  category      Category      @relation(fields: [categoryId], references: [id])
+  instructorName String
+  instructorBio  String?
+  instructorAvatar String?
+  isPublished   Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  modules       Module[]
+  quizzes       Quiz[]
+  orders        Order[]
+  certificates  Certificate[]
+  reviews       Review[]
+  wishlist      Wishlist[]
+}
+
+model Module {
+  id        String   @id @default(uuid())
+  title     String
+  sortOrder Int
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lessons   Lesson[]
+  quizzes   Quiz[]
+}
+
+model Lesson {
+  id            String     @id @default(uuid())
+  title         String
+  sortOrder     Int
+  moduleId      String
+  module        Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  videoUrl      String?
+  videoDuration Float      @default(0) // duration in seconds
+  notesUrl      String?
+  notesFilename String?
+  isFreePreview Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  progress      Progress[]
+}
+
+model Progress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  isCompleted Boolean  @default(false)
+  timeSpent   Int      @default(0) // time spent in seconds
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+}
+
+model Quiz {
+  id           String        @id @default(uuid())
+  title        String
+  courseId     String
+  course       Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  moduleId     String?
+  module       Module?       @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  passingScore Int           @default(70) // Percentage required to pass
+  createdAt    DateTime      @default(now())
+  questions    Question[]
+  quizAttempts QuizAttempt[]
+}
+
+enum QuestionType {
+  MCQ
+  MULTIPLE
+  TF
+}
+
+model Question {
+  id            String       @id @default(uuid())
+  quizId        String
+  quiz          Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  text          String
+  type          QuestionType
+  options       Json         // Array of strings: ["Option A", "Option B", ...]
+  correctAnswer Json         // Array of indices or values: [0] or ["True"]
+}
+
+model QuizAttempt {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  score     Float    // Score percentage obtained
+  passed    Boolean
+  createdAt DateTime @default(now())
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Order {
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId         String
+  course           Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  amount           Float       // Total paid price
+  tax              Float       // GST component
+  currency         String      @default("INR")
+  gatewayOrderId   String?     // Razorpay Order ID
+  gatewayPaymentId String?     // Razorpay Payment ID
+  status           OrderStatus @default(PENDING)
+  createdAt        DateTime    @default(now())
+  payment          Payment?
+  invoice          Invoice?
+}
+
+model Payment {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount     Float
+  status     String   // "captured", "failed", etc.
+  method     String   // "upi", "card", "netbanking", etc.
+  details    Json?    // Full webhook payload or metadata
+  createdAt  DateTime @default(now())
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  invoiceNumber String   @unique // Format: INV-YYYYMMDD-XXXX
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pdfUrl        String?  // Path/URL to invoice PDF
+  createdAt     DateTime @default(now())
+}
+
+model Certificate {
+  id               String   @id @default(uuid())
+  certificateId    String   @unique // Format: CERT-YYYYMMDD-XXXX
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId         String
+  course           Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  issueDate        DateTime @default(now())
+  verificationToken String   @unique
+  qrCodeUrl        String?
+  signatureUrl     String?
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  rating    Int      // 1 to 5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, courseId])
+}
+
+model Wishlist {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, courseId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // e.g. "USER_LOGIN", "COURSE_CREATE", "PAYMENT_REFUND"
+  ipAddress String?
+  details   String?  // JSON string or summary
+  createdAt DateTime @default(now())
+}
