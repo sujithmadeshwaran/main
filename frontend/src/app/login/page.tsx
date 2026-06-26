@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
@@ -21,7 +21,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const { user, loginWithPassword, requestOTPCode, verifyOTPCode, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
@@ -316,5 +316,17 @@ export default function LoginPage() {
         SkillForge Security Layer v1.0. All connections are SSL encrypted.
       </footer>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
